@@ -49,9 +49,44 @@ const statusElement = document.getElementById("status");
 const coordsElement = document.getElementById("coordinates");
 
 // When the connection opens successfully, update our green status text
+// Automatically detect the current webpage URL domain
+const host = window.location.host;
+const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const ws = new WebSocket(`${protocol}//${host}/ws/driver/driver_1`);
+
+const statusElement = document.getElementById("status");
+const coordsElement = document.getElementById("coordinates");
+
+// When the connection opens successfully...
 ws.onopen = () => {
-    statusElement.innerText = "LIVE RADAR ACTIVE";
+    statusElement.innerText = "LIVE RADAR ACTIVE (AUTOPILOT)";
     statusElement.style.color = "green";
+
+    // --- AUTOPILOT SIMULATOR START ---
+    // This code now runs automatically right inside the webpage!
+    // No more copying and pasting into the browser console.
+    setInterval(() => {
+        let testLat = 12.9716 + (Math.random() - 0.5) * 0.005;
+        let testLng = 77.5946 + (Math.random() - 0.5) * 0.005;
+        
+        // We use the open connection to send data as the driver
+        ws.send(JSON.stringify({ lat: testLat, lng: testLng }));
+    }, 2000);
+    // --- AUTOPILOT SIMULATOR END ---
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const lat = data.lat;
+    const lng = data.lng;
+
+    coordsElement.innerText = `Latitude: ${lat.toFixed(4)}, Longitude: ${lng.toFixed(4)}`;
+    driverMarker.setLatLng([lat, lng]);
+};
+
+ws.onclose = () => {
+    statusElement.innerText = "DISCONNECTED";
+    statusElement.style.color = "red";
 };
 
 // 5. Every single time the backend whispers a location package down the line...
