@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-Time Delivery Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f9; }
+        #map { height: 450px; width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .status-panel { margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+    <h1>Delivery Fleet Radar</h1>
+    <div class="status-panel">
+        <h3>Live Tracking: <span id="status" style="color: red;">Connecting...</span></h3>
+        <p>Driver ID: <strong>driver_1</strong></p>
+        <p id="coordinates">Waiting for location signals...</p>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. Set up the empty Leaflet globe container and center it on Bengaluru
+// [Latitude, Longitude], Zoom Level (13 is close city-level view)
+const map = L.map('map').setView([12.9716, 77.5946], 13);
+
+// 2. Load and draw the physical street map tiles from OpenStreetMap
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// 3. Create a blank, generic map marker pin and stick it onto our map
+let driverMarker = L.marker([12.9716, 77.5946]).addTo(map);
+driverMarker.bindPopup("<b>Driver 1</b><br>Active Delivery").openPopup();
+
+// 4. Dial into our backend's WebSocket walkie-talkie channel
+// Automatically detect the current webpage URL domain
+const host = window.location.host;
+
+// If we are on localhost, use ws://, otherwise use secure wss:// for production
+const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+
+// Dynamically construct our socket target endpoint!
+const ws = new WebSocket(`${protocol}//${host}/ws/driver/driver_1`);
+const statusElement = document.getElementById("status");
+const coordsElement = document.getElementById("coordinates");
+
+// When the connection opens successfully, update our green status text
+ws.onopen = () => {
+    statusElement.innerText = "LIVE RADAR ACTIVE";
+    statusElement.style.color = "green";
+};
+
+// 5. Every single time the backend whispers a location package down the line...
+ws.onmessage = (event) => {
+    // Parse the raw text data package back into a JavaScript object
+    const data = JSON.parse(event.data);
+    const lat = data.lat;
+    const lng = data.lng;
+
+    // Update the textual description elements on our dashboard panel
+    coordsElement.innerText = `Latitude: ${lat.toFixed(4)}, Longitude: ${lng.toFixed(4)}`;
+
+    // Instantly slide the marker pin to the new coordinates on the map graphic!
+    driverMarker.setLatLng([lat, lng]);
+};
+
+// If the connection drops out, alert the user with a red marker status
+ws.onclose = () => {
+    statusElement.innerText = "DISCONNECTED";
+    statusElement.style.color = "red";
+};
+    </script>
+</body>
+</html>
