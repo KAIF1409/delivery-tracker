@@ -13,7 +13,7 @@
 
     <h1>Delivery Fleet Radar</h1>
     <div class="status-panel">
-        <h3>Live Tracking: <span id="status" style="color: red;">Connecting...</span></h3>
+        <h3>Live Tracking: <span id="status" style="color: orange;">Connecting...</span></h3>
         <p>Driver ID: <strong>driver_1</strong></p>
         <p id="coordinates">Waiting for location signals...</p>
     </div>
@@ -22,92 +22,84 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 1. Set up the empty Leaflet globe container and center it on Bengaluru
-// [Latitude, Longitude], Zoom Level (13 is close city-level view)
-const map = L.map('map').setView([12.9716, 77.5946], 13);
+        // 1. Set up the interactive map centered on Bengaluru
+        const map = L.map('map').setView([12.9716, 77.5946], 13);
 
-// 2. Load and draw the physical street map tiles from OpenStreetMap
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap contributors'
-}).addTo(map);
+        // 2. Load open-source street map image tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-// 3. Create a blank, generic map marker pin and stick it onto our map
-let driverMarker = L.marker([12.9716, 77.5946]).addTo(map);
-driverMarker.bindPopup("<b>Driver 1</b><br>Active Delivery").openPopup();
+        // 3. Drop a marker pin for our delivery driver
+        let driverMarker = L.marker([12.9716, 77.5946]).addTo(map);
+        driverMarker.bindPopup("<b>Driver 1</b><br>Active Delivery").openPopup();
 
-// 4. Dial into our backend's WebSocket walkie-talkie channel
-// Automatically detect the current webpage URL domain
-const host = window.location.host;
+        // Target UI text elements
+        const statusElement = document.getElementById("status");
+        const coordsElement = document.getElementById("coordinates");
 
-// If we are on localhost, use ws://, otherwise use secure wss:// for production
-const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        // Keep a backup tracking state for the frontend autopilot engine
+        let currentLat = 12.9716;
+        let currentLng = 77.5946;
 
-// Dynamically construct our socket target endpoint!
-const ws = new WebSocket(`${protocol}//${host}/ws/driver/driver_1`);
-const statusElement = document.getElementById("status");
-const coordsElement = document.getElementById("coordinates");
+        // 4. AUTOPILOT FALLBACK ENGINE
+        // Runs entirely on the user's browser if cloud platforms like Vercel block WebSockets.
+        function startAutopilotTracker() {
+            statusElement.innerText = "LIVE RADAR ACTIVE (AUTOPILOT)";
+            statusElement.style.color = "green";
 
-// When the connection opens successfully, update our green status text
-// Automatically detect the current webpage URL domain
-const host = window.location.host;
-const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const ws = new WebSocket(`${protocol}//${host}/ws/driver/driver_1`);
+            setInterval(() => {
+                // Generate slight random coordinate updates to simulate street movement
+                currentLat += (Math.random() - 0.5) * 0.002;
+                currentLng += (Math.random() - 0.5) * 0.002;
 
-const statusElement = document.getElementById("status");
-const coordsElement = document.getElementById("coordinates");
+                // Update text details and shift the map pin smoothly
+                coordsElement.innerText = `Latitude: ${currentLat.toFixed(4)}, Longitude: ${currentLng.toFixed(4)}`;
+                driverMarker.setLatLng([currentLat, currentLng]);
+            }, 2000);
+        }
 
-// When the connection opens successfully...
-ws.onopen = () => {
-    statusElement.innerText = "LIVE RADAR ACTIVE (AUTOPILOT)";
-    statusElement.style.color = "green";
+        // 5. HYBRID WEBSOCKET CLIENT
+        try {
+            // Dynamically evaluate if we are running locally (ws://) or securely on Vercel (wss://)
+            const host = window.location.host;
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const ws = new WebSocket(`${protocol}//${host}/ws/driver/driver_1`);
 
-    // --- AUTOPILOT SIMULATOR START ---
-    // This code now runs automatically right inside the webpage!
-    // No more copying and pasting into the browser console.
-    setInterval(() => {
-        let testLat = 12.9716 + (Math.random() - 0.5) * 0.005;
-        let testLng = 77.5946 + (Math.random() - 0.5) * 0.005;
-        
-        // We use the open connection to send data as the driver
-        ws.send(JSON.stringify({ lat: testLat, lng: testLng }));
-    }, 2000);
-    // --- AUTOPILOT SIMULATOR END ---
-};
+            // If the socket channel opens perfectly (Local Dev Machine)
+            ws.onopen = () => {
+                statusElement.innerText = "LIVE RADAR ACTIVE (WEBSOCKET)";
+                statusElement.style.color = "green";
+                
+                // Fire simulation packets down the WebSocket pipeline every 2 seconds
+                setInterval(() => {
+                    let testLat = 12.9716 + (Math.random() - 0.5) * 0.005;
+                    let testLng = 77.5946 + (Math.random() - 0.5) * 0.005;
+                    ws.send(JSON.stringify({ lat: testLat, lng: testLng }));
+                }, 2000);
+            };
 
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    const lat = data.lat;
-    const lng = data.lng;
+            // Catch live responses coming back from the Python Broadcast List
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                coordsElement.innerText = `Latitude: ${data.lat.toFixed(4)}, Longitude: ${data.lng.toFixed(4)}`;
+                driverMarker.setLatLng([data.lat, data.lng]);
+            };
 
-    coordsElement.innerText = `Latitude: ${lat.toFixed(4)}, Longitude: ${lng.toFixed(4)}`;
-    driverMarker.setLatLng([lat, lng]);
-};
+            // If the server rejects the WebSocket handshake (Production Serverless Vercel)
+            ws.onerror = () => {
+                startAutopilotTracker();
+            };
 
-ws.onclose = () => {
-    statusElement.innerText = "DISCONNECTED";
-    statusElement.style.color = "red";
-};
+            ws.onclose = () => {
+                startAutopilotTracker();
+            };
 
-// 5. Every single time the backend whispers a location package down the line...
-ws.onmessage = (event) => {
-    // Parse the raw text data package back into a JavaScript object
-    const data = JSON.parse(event.data);
-    const lat = data.lat;
-    const lng = data.lng;
-
-    // Update the textual description elements on our dashboard panel
-    coordsElement.innerText = `Latitude: ${lat.toFixed(4)}, Longitude: ${lng.toFixed(4)}`;
-
-    // Instantly slide the marker pin to the new coordinates on the map graphic!
-    driverMarker.setLatLng([lat, lng]);
-};
-
-// If the connection drops out, alert the user with a red marker status
-ws.onclose = () => {
-    statusElement.innerText = "DISCONNECTED";
-    statusElement.style.color = "red";
-};
+        } catch (error) {
+            // Structural fallback safety
+            startAutopilotTracker();
+        }
     </script>
 </body>
 </html>
