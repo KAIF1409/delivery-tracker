@@ -2,7 +2,7 @@
 
 A FastAPI + WebSocket backend paired with a Leaflet.js map dashboard, built to explore how real-time location tracking actually works under the hood — the kind of thing apps like Swiggy, Zomato, or Uber rely on to move a little pin across your screen as a delivery rider gets closer.
 
-🔗 Live: deployed on Vercel (serverless) 
+🔗[ Live: deployed on Vercel (serverless)](https://delivery-tracker-rho-six.vercel.app/) 
 
 
 ---
